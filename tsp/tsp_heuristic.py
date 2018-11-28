@@ -18,10 +18,38 @@ class TspHeuristic:
     def nodes(self):
         return self.tsp.nodes
 
+    def _select_new_node(self, size=1):
+        """Randomly selects one of the nodes that have no connection so far."""
+        available = [i for (i,v) in zip(range(self.tour.shape[0]),self.tour.sum(axis=1) == 0) if v]
+        selected = random.sample(available, size)
+        return selected[0] if size == 1 else selected
+
+    def _insert_into_tour(self, left, new, right=False):
+        """Inserts a node into the tour. If only left is given, the node is appended after left.
+        If left and right are given, the new node goes in between left and right."""
+        if not right:
+
+            self.tour.itemset((left, new),1)
+            self.tour.itemset((new, left),1)
+        else:
+            self.tour[left][right] = 0 # break connection
+            self.tour[right][left] = 0
+            self.tour[left][new] = 1 # append new after left
+            self.tour[new][left] = 1
+            self.tour[new][right] = 1 # prepend new before right
+            self.tour[right][new] = 1
+
     def _get_occupied_nodes_in_tour(self):
         """Returns all nodes with two connections (fully connected)"""
-        connections = [(i,j) for i in range(self.num_nodes) for j in np.where(self.tour[i,:]==True)[0] if i < j]
+        connected = np.where(self.tour.sum(axis=1) == 2)
+        connections = [(i,j) for i in connected[0] for j in np.where(self.tour[i,:]==True)[0] if i < j]
         return connections
+
+    def _tour_finished(self):
+        # Tour is finished when all nodes except start and end have 2 neighbors
+        if np.sum(self.tour) == 2*(self.num_nodes - 1):
+            return True
+        return False
 
     def _get_last_in_tour(self):
         open_nodes = tuple([i for (i,v) in zip(range(self.num_nodes),self.tour.sum(axis=1) == 1) if v])
@@ -34,33 +62,8 @@ class TspHeuristic:
             else:
                 return False
 
-    def _select_new_node(self, size=1):
-        """Randomly selects one of the nodes that have no connection so far."""
-        available = [i for (i,v) in zip(range(self.tour.shape[0]),self.tour.sum(axis=1) == 0) if v]
-        selected = random.sample(available, size)
-        return selected[0] if size == 1 else selected
-
-    def _insert_into_tour(self, left, new, right=False):
-        """Inserts a node into the tour. If only left is given, the node is appended after left.
-        If left and right are given, the new node goes in between left and right."""
-        if not right:
-            self.tour.itemset((left, new),1)
-            self.tour.itemset((new, left),1)
-        else:
-            self.tour.itemset((left, right),0) # break connection
-            self.tour.itemset((right, left),0)
-            self.tour.itemset((left, new),1) # append new after left
-            self.tour.itemset((new, left),1)
-            self.tour.itemset((right, new),1) # prepend new before right
-            self.tour.itemset((new, right),1)
-
-    def _tour_finished(self):
-        # Tour is finished when all nodes except start and end have 2 neighbors
-        if np.sum(self.tour) == 2*(self.num_nodes - 1):
-            return True
-        return False
-
     def get_tour(self):
+        """Returns the sequence of the tour."""
         nodes = []
         nodes.append(self.start)
 
@@ -83,6 +86,16 @@ class TspHeuristic:
             nodes.append(next)
             current = next
         return nodes
+
+    def get_tour_length(self):
+        if not self._tour_finished():
+            return False
+        else:
+            tour = self.get_tour()
+            for i in range(len(tour)-1):
+                self.length += self.tsp.distance_matrix[tour[i]][tour[i+1]]
+            self.length += self.tsp.distance_matrix[tour[-1]][tour[1]]
+        return self.length
 
     def get_tour_for_plotting(self):
         nodes = self.get_tour()
@@ -129,9 +142,8 @@ class BestInsertion(ConstructionHeuristic):
             except ValueError:
                 print("No more nodes available! {}".format(set(self.tsp.nodes.keys()) - set(self.tour)))
                 print("Number of None values in tour: {}".format(len([i for i in self.tour if i is None])))
-            insert_between, new_delta = self._calc_loss(next)
-            self.length += new_delta
-            self._insert_into_tour(insert_between[0],next,insert_between[1])
+            left, right = self._calc_loss(next)
+            self._insert_into_tour(left, next, right)
 
     def _calc_loss(self, new_node):
         """Calculates the increase when the new point is inserted between any of the
@@ -140,25 +152,32 @@ class BestInsertion(ConstructionHeuristic):
         where the added distance is minimal.
         """
         deltas = []
-        c = self._get_occupied_nodes_in_tour() # returns coordinate tuples
+        c = self._get_occupied_nodes_in_tour() # returns coordinate tuples of fully connected nodes
         start = self.start
         end = self._get_last_in_tour()
 
         def d(n1,n2):
             return self.tsp.distance_matrix[n1,n2]
 
-        for i in range(len(c)):
-            deltas.append(d(c[i][0], new_node) + d(new_node,c[i][1]) - d(c[i][0], c[i][1]))
+        if len(c) > 0:
+            for i in range(len(c)):
+                deltas.append(d(c[i][0], new_node) + d(new_node,c[i][1]) - d(c[i][0], c[i][1]))
+        else: # We are at the start of the algorithm, there are 3 nodes.
+            visited = self.get_tour()
+            second = visited[1]
+            c = c + [(start, second), (second, end)]
+            deltas.append(d(start, new_node)+d(new_node, second) - d(start, second))
+            deltas.append(d(second, new_node)+d(new_node, end) - d(second, end))
 
         #Check between current end and start of tour
-            deltas.append(d(end, new_node) + d(new_node,start) - d(end,start))
-            c = c + [(end, False)]
+        deltas.append(d(end, new_node) + d(new_node,start) - d(end,start))
+        c = c + [(end, False)]
 
         shortest = np.argmin(deltas)
         insert_between = c[shortest]
-        new_delta = deltas[shortest]
+        self.length += deltas[shortest]
 
-        return (insert_between, new_delta)
+        return insert_between
 
 
 class BestBestInsertion(ConstructionHeuristic):
@@ -181,19 +200,39 @@ class BestBestInsertion(ConstructionHeuristic):
         self.init_algo()
 
         while not self._tour_finished():
-            next = self.select_next()
-            self._insert_into_tour(next[0], next[1])
-
+            left, next, right = self.select_next()
+            self._insert_into_tour(left, next, right)
 
     def select_next(self):
-        # TODO: Speed this up through linalg!
-        available = [i for (i,v) in zip(range(self.tour.shape[0]),self.tour.sum(axis=1) == 0) if v] # all unconnected nodes
-        print("Available nodes: {}".format(available))
+        """Finds the next node to insert. Determines the distance of all nodes
+        not in the tour so far to all the nodes already in the tour.
 
-        candidates = [(i, j, self.tsp.distance_matrix[i,j]) for i in available for j in np.where(self.tour[i,:]) if i != j]
-        print("The first 6 candidates: {}".format(candidates[0:5]))
-        next = sorted(candidates, key=lambda tup: tup[2])[0]
-        print("Next node selected: {}".format(next))
-        self.length += next[2]
-        print("returning: {}".format(next[0:1]))
-        return (next[0:1])
+        Returns:
+        A tuple of the format(left, next, right)
+        next:   Node number of next to insert
+        left:   The node to the left"""
+        visited = self.get_tour()
+
+        available = np.where(self.tour.sum(axis=1) == 0)[0] # Select available nodes
+        candidates = np.where(self.tour.sum(axis=1) > 0)[0] # Select the nodes already in the tour
+        available_mask = np.ones_like(self.tour,dtype=bool) # By default, mask everything
+        #Unmask where we could possibly insert
+        for row in available:
+            for col in candidates:
+                available_mask[row][col] = False
+        # Build masked distance matrix
+        masked_distance = np.ma.array(self.tsp.distance_matrix, mask=available_mask,shrink=False)
+        # Get numbers of next and left nodes
+        next_after = np.where(masked_distance == masked_distance.min())
+        left = next_after[1][0]
+        next = next_after[0][0]
+        # figure out right node
+        if not next_after[1][0] == visited[-1]:
+            right = visited[np.where(visited == next_after[1][0])[0][0]+1]
+        else:
+            right = False
+
+        self.length += masked_distance.min()
+
+        return (left, next, right)
+
