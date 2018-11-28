@@ -3,8 +3,8 @@ import unittest
 import pandas as pd
 import numpy as np
 
-from tsp_heuristic import BestInsertion, BestBestInsertion, TspHeuristic
-from tsp import TravelingSalesmanProblem
+from tsp.tsp_heuristic import BestInsertion, BestBestInsertion, TspHeuristic
+from tsp.tsp import TravelingSalesmanProblem
 
 
 class TestTspHeuristic(unittest.TestCase):

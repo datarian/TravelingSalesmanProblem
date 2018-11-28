@@ -5,18 +5,77 @@ import operator
 import random
 
 
+from tsp.tsp import Edge
+
+
 class TspHeuristic:
     def __init__(self, tsp_config):
         self.tsp = tsp_config
         self.tour = np.zeros_like(tsp_config.distance_matrix,dtype=bool)
-        self.n = len(self.tsp.nodes)
         self.num_nodes = self.tour.shape[0]
+        self.num_edges = self.num_nodes - 1
         self.length = 0
         self.start = None
 
     @property
     def nodes(self):
         return self.tsp.nodes
+
+    def calculate_tour(self):
+        """"""
+        raise NotImplementedError()
+
+    def loss(self):
+        if not self.get_tour_length():
+            self.calculate_tour()
+        return self.get_tour_length()
+
+    def get_tour(self):
+        """Returns the sequence of the tour (node numbers)."""
+        nodes = []
+        nodes.append(self.start)
+
+        current = self.start
+        next = True
+
+        candidates = np.arange(self.num_nodes)
+
+        while len(nodes) < self.num_nodes:
+            mask = self.tour[current,:] == True # look at row for current node. Connections are true
+            possible_nexts = list(candidates[mask])
+            if len(possible_nexts) == 1:
+                # We either have first or last node. If it's the last, we simply do nothing.
+                if current == self.start:
+                    next = possible_nexts[0]
+            else:
+                # We're inside the tour. Remove the node we came from
+                print("Current list of nodes: {}".format(nodes))
+                possible_nexts.remove(nodes[-2])
+                next = possible_nexts[0]
+            nodes.append(next)
+            current = next
+        return nodes
+
+    def get_tour_length(self):
+        """Returns the length of the final tour."""
+        if not self._tour_finished():
+            return False
+        else:
+            tour = self.get_tour()
+            for i in range(len(tour)-1):
+                self.length += self.tsp.distance_matrix[tour[i]][tour[i+1]]
+            self.length += self.tsp.distance_matrix[tour[-1]][tour[1]]
+        return self.length
+
+    def get_tour_for_plotting(self):
+        """Returns the node coordinates in the final sequence."""
+        nodes = self.get_tour()
+        tour = [self.nodes[i].coords for i in nodes]
+        return tour
+
+    def get_starting_node_for_plotting(self):
+        """Returns the first node's coordinates."""
+        return self.nodes[self.start].coords
 
     def _select_new_node(self, size=1):
         """Randomly selects one of the nodes that have no connection so far."""
@@ -62,64 +121,20 @@ class TspHeuristic:
             else:
                 return False
 
-    def get_tour(self):
-        """Returns the sequence of the tour."""
-        nodes = []
-        nodes.append(self.start)
-
-        last = current = self.start
-        next = True
-
-        candidates = np.arange(self.num_nodes)
-
-        while len(nodes) < self.num_nodes:
-            mask = self.tour[current,:] == True # look at row for current node. Connections are true
-            possible_nexts = list(candidates[mask])
-            if len(possible_nexts) == 1:
-                # We either have first or last node. If it's the last, we simply do nothing.
-                if current == self.start:
-                    next = possible_nexts[0]
-            else:
-                # We're inside the tour. Remove the node we came from
-                possible_nexts.remove(nodes[-2])
-                next = possible_nexts[0]
-            nodes.append(next)
-            current = next
-        return nodes
-
-    def get_tour_length(self):
-        if not self._tour_finished():
-            return False
-        else:
-            tour = self.get_tour()
-            for i in range(len(tour)-1):
-                self.length += self.tsp.distance_matrix[tour[i]][tour[i+1]]
-            self.length += self.tsp.distance_matrix[tour[-1]][tour[1]]
-        return self.length
-
-    def get_tour_for_plotting(self):
-        nodes = self.get_tour()
-        tour = [self.nodes[i].coords for i in nodes]
-        return tour
-
-    def get_starting_node_for_plotting(self):
-        return self.nodes[self.start].coords
-
-
+############################################################################################
 # The three construction heuristics inherit from a common class
+
 
 class ConstructionHeuristic(TspHeuristic):
     def __init__(self, tsp_config):
-        return super().__init__(tsp_config)
+        super().__init__(tsp_config)
 
 
 class BestInsertion(ConstructionHeuristic):
     def __init__(self, tsp_config):
-        return super().__init__(tsp_config)
+        super().__init__(tsp_config)
 
-
-
-    def init_algo(self):
+    def _init_algo(self):
         """ Initializes the best insertion algorithm.
         Selects three random nodes as the starting tour.
         """
@@ -134,7 +149,7 @@ class BestInsertion(ConstructionHeuristic):
     def calculate_tour(self):
         """Runs the best insertion algorithm."""
 
-        self.init_algo()
+        self._init_algo()
 
         while not self._tour_finished():
             try:
@@ -175,16 +190,15 @@ class BestInsertion(ConstructionHeuristic):
 
         shortest = np.argmin(deltas)
         insert_between = c[shortest]
-        self.length += deltas[shortest]
 
         return insert_between
 
 
 class BestBestInsertion(ConstructionHeuristic):
     def __init__(self, tsp_config):
-        return super().__init__(tsp_config)
+        super().__init__(tsp_config)
 
-    def init_algo(self):
+    def _init_algo(self):
         """ Initializes the best-best insertion algorithm.
         Selects one random node to start the tour.
         """
@@ -197,13 +211,13 @@ class BestBestInsertion(ConstructionHeuristic):
     def calculate_tour(self):
         """Runs the best insertion algorithm."""
 
-        self.init_algo()
+        self._init_algo()
 
         while not self._tour_finished():
-            left, next, right = self.select_next()
+            left, next, right = self._select_next()
             self._insert_into_tour(left, next, right)
 
-    def select_next(self):
+    def _select_next(self):
         """Finds the next node to insert. Determines the distance of all nodes
         not in the tour so far to all the nodes already in the tour.
 
@@ -232,7 +246,44 @@ class BestBestInsertion(ConstructionHeuristic):
         else:
             right = False
 
-        self.length += masked_distance.min()
-
         return (left, next, right)
 
+class ShortestEdge(ConstructionHeuristic):
+    def __init__(self, tsp_config):
+        super().__init__(tsp_config)
+        self.edges = sorted([Edge(i,j,self.tsp) for i in range(self.num_nodes) for j in range(self.num_nodes) if i != j and i < j])
+
+    def _init_algo(self):
+        self.tour = np.zeros_like(self.tsp.distance_matrix)
+        self.length = 0
+        self.start = self.edges[0].node1
+        self._insert_into_tour(self.edges[0].node1,self.edges[0].node2, right=False)
+
+
+    def _check_constraints(self, new_edge):
+        n1 = new_edge.node1
+        n2 = new_edge.node2
+
+        # Check closed loop
+        if self.tour[n1,:].sum() == 1 and self.tour[n2,:].sum() == 1:
+            return False
+        # Check node degrees:
+        if self.tour[n1,:].sum() == 2 or self.tour[n2,:].sum() == 2:
+            return False
+        return True
+
+    def calculate_tour(self):
+
+        self._init_algo()
+        edge_stack = self.edges.copy()
+        edge_stack.pop(0) # The first edge already inserted
+
+        c = 1
+        for e in edge_stack:
+            if c <= self.num_edges:
+                if self._check_constraints(e):
+                    self._insert_into_tour(e.node1,e.node2,False)
+                    edge_stack.remove(e)
+                    c += 1
+            else:
+                break

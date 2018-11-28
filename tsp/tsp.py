@@ -1,4 +1,5 @@
 import scipy.spatial as sp
+import functools
 import numpy as np
 import pandas as pd
 
@@ -13,6 +14,28 @@ class Node:
     @property
     def coords(self):
         return (self.x, self.y)
+
+@functools.total_ordering
+class Edge:
+    def __init__(self, node1, node2, tsp_config):
+        self.tsp = tsp_config
+        self.node1 = node1
+        self.node2 = node2
+        self.edge = self.tsp.distance_matrix[node1,node2]
+
+    def __repr__(self):
+        return "{}: nodes: ({}, {}). Length: {}".format(self.__class__.__name__, self.node1, self.node2, self.edge)
+
+    def __lt__(self, other):
+        return self.edge < other.edge
+
+    def __eq__(self, other):
+        return self.edge == other.edge
+
+    @property
+    def length(self):
+        return self.edge
+
 
 
 class TravelingSalesmanProblem:
