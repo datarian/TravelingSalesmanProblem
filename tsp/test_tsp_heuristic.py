@@ -3,7 +3,7 @@ import unittest
 import pandas as pd
 import numpy as np
 
-from tsp.tsp_heuristic import BestInsertion, BestBestInsertion, TspHeuristic
+from tsp.tsp_heuristic import BestInsertion, BestBestInsertion, ShortestEdge, TspHeuristic
 from tsp.tsp import TravelingSalesmanProblem
 
 
@@ -43,10 +43,16 @@ class TestTspHeuristic(unittest.TestCase):
         self.assertIsInstance(nodes,pd.DataFrame)
 
     def test_select_available(self):
-        t = TravelingSalesmanProblem()
-        h = TspHeuristic(nodes= pd.DataFrame([[1,0,0],[2,1,0]], columns=['node','x','y']), distance=np.zeros((6,6)), tsp_config=t)
+        t = TravelingSalesmanProblem(nodes= pd.DataFrame([[1,0,0],[2,1,0]], columns=['node','x','y']))
+        h = TspHeuristic(tsp_config=t)
         h._insert_into_tour(2,1,3)
         h._insert_into_tour(3,4)
         print("\n The tour: \n{}".format(h.tour))
         print("\nFully connected nodes: {}\n".format(h._get_occupied_nodes_in_tour()))
         print("\n Open nodes: {}".format(h._get_first_last_in_tour()))
+
+    def test_shortest_edge(self):
+        nodes = pd.read_csv("../TSP_411.txt", sep='\s+', names=['node', 'x', 'y'], header=None).iloc[0:4,:]
+        t = TravelingSalesmanProblem(nodes)
+        se = ShortestEdge(t)
+        se.calculate_tour()

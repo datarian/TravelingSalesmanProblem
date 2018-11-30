@@ -14,6 +14,7 @@ class TspHeuristic:
         self.tour = np.zeros_like(tsp_config.distance_matrix,dtype=bool)
         self.num_nodes = self.tour.shape[0]
         self.num_edges = self.num_nodes - 1
+        self.stopping_criterion = 2*(self.num_nodes - 1) # All nodes have 2 edges attached, except start/end, which have 1
         self.length = 0
         self.start = None
 
@@ -40,17 +41,24 @@ class TspHeuristic:
 
         candidates = np.arange(self.num_nodes)
 
+        print("Starting at node: {}".format(self.start))
+
         while len(nodes) < self.num_nodes:
             mask = self.tour[current,:] == True # look at row for current node. Connections are true
             possible_nexts = list(candidates[mask])
+            print("Possible nexts before comparison: {}".format(possible_nexts))
             if len(possible_nexts) == 1:
                 # We either have first or last node. If it's the last, we simply do nothing.
                 if current == self.start:
                     next = possible_nexts[0]
             else:
                 # We're inside the tour. Remove the node we came from
-                print("Current list of nodes: {}".format(nodes))
-                possible_nexts.remove(nodes[-2])
+                try:
+                    possible_nexts.remove(nodes[-2])
+                except IndexError:
+                    # We are at the beginning, but it was probably an edge-base heuristic.
+                    # The starting node has two connections. We go in an arbitrary direction from here
+                    pass
                 next = possible_nexts[0]
             nodes.append(next)
             current = next
@@ -87,7 +95,6 @@ class TspHeuristic:
         """Inserts a node into the tour. If only left is given, the node is appended after left.
         If left and right are given, the new node goes in between left and right."""
         if not right:
-
             self.tour.itemset((left, new),1)
             self.tour.itemset((new, left),1)
         else:
@@ -106,7 +113,7 @@ class TspHeuristic:
 
     def _tour_finished(self):
         # Tour is finished when all nodes except start and end have 2 neighbors
-        if np.sum(self.tour) == 2*(self.num_nodes - 1):
+        if np.sum(self.tour) == self.stopping_criterion:
             return True
         return False
 
@@ -251,7 +258,9 @@ class BestBestInsertion(ConstructionHeuristic):
 class ShortestEdge(ConstructionHeuristic):
     def __init__(self, tsp_config):
         super().__init__(tsp_config)
-        self.edges = sorted([Edge(i,j,self.tsp) for i in range(self.num_nodes) for j in range(self.num_nodes) if i != j and i < j])
+        self.edges = sorted([Edge(i,j,self.tsp) for i in range(self.num_nodes)
+                                                for j in range(i+1, self.num_nodes)])
+        self.condition_tour_premature = self.num_nodes*2
 
     def _init_algo(self):
         self.tour = np.zeros_like(self.tsp.distance_matrix)
@@ -264,8 +273,11 @@ class ShortestEdge(ConstructionHeuristic):
         n1 = new_edge.node1
         n2 = new_edge.node2
 
-        # Check closed loop
-        if self.tour[n1,:].sum() == 1 and self.tour[n2,:].sum() == 1:
+        # Check prematurely closed loop.
+        # If all other rows in matrix have a sum of 2 and the next 2 are both equal to 1, we would finish too early
+        mask = [False]*self.num_nodes
+        mask[n1] = mask[n2] = True
+        if self.tour[n1,:].sum() == 1 and self.tour[n2,:].sum() == 1 and np.all(np.sum(self.tour[mask,:],axis =1)==2):
             return False
         # Check node degrees:
         if self.tour[n1,:].sum() == 2 or self.tour[n2,:].sum() == 2:
@@ -276,14 +288,13 @@ class ShortestEdge(ConstructionHeuristic):
 
         self._init_algo()
         edge_stack = self.edges.copy()
-        edge_stack.pop(0) # The first edge already inserted
+        edge_stack.remove(self.edges[0]) # The first edge already inserted
 
-        c = 1
-        for e in edge_stack:
-            if c <= self.num_edges:
-                if self._check_constraints(e):
+        while not self._tour_finished():
+            print("Starting new iteration. Number of edges in tour: {}".format(self.tour.sum()/2))
+            for e in edge_stack:
+                if self._check_constraints(e) and not self._tour_finished():
                     self._insert_into_tour(e.node1,e.node2,False)
                     edge_stack.remove(e)
-                    c += 1
-            else:
-                break
+                #else:
+                #    print("Checks failed for edge {}".format(e))
