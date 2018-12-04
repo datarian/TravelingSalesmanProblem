@@ -1,3 +1,4 @@
+"""This module implements data structures for a traveling salesman problem."""
 import scipy.spatial as sp
 import functools
 import numpy as np
@@ -6,6 +7,13 @@ import pandas as pd
 from collections import namedtuple
 
 class Node:
+    """Represents one node in the network.
+
+    Parameters:
+    -----------
+
+    node:   A named tuple with fields 'node', 'x' and 'y'
+    """
     def __init__(self, node):
         self.node = int(node['node'])
         self.x = int(node['x'])
@@ -13,10 +21,12 @@ class Node:
 
     @property
     def coords(self):
+        "Returns the coordinates for the node"
         return (self.x, self.y)
 
 @functools.total_ordering
 class Edge:
+    """Represents an edge, the connecting line terminated by two nodes."""
     def __init__(self, node1, node2, tsp_config):
         self.tsp = tsp_config
         self.node1 = node1
@@ -37,7 +47,6 @@ class Edge:
         return self.edge
 
 
-
 class TravelingSalesmanProblem:
     """Holds the nodes and distance matrix for a traveling salesman problem.
     It also provides methods for calculating the distance between nodes.
@@ -47,8 +56,9 @@ class TravelingSalesmanProblem:
 
     nodes:              a pandas dataframe with columns [node, x, y]
     distance_matrix:    an nxn symmetric matrix with the distances between nodes.
-        If not passed, it is built in the constructor.
-    distance_metric:
+                        If not passed, it is constructed using an L2 distance metric by default.
+    distance_metric:    The metric used to calculate distances in the network.
+                        Has to accept the coordinates of two nodes as parameters
     """
 
     def __init__(self, nodes = None, distance_metric = sp.distance.euclidean):
