@@ -26,12 +26,14 @@ class TspHeuristic:
         """"""
         raise NotImplementedError()
 
-    def loss(self):
-        if not self._tour_finished():
-            self.calculate_tour()
-        tour = self.get_tour()
-        for i in range(len(tour)-1):
-            self.length += self.tsp.distance_matrix[tour[i]][tour[i+1]]
+    def loss(self, tour=None):
+        if self.length == 0:
+            if not self._tour_finished():
+             self.calculate_tour()
+            tour = self.get_tour()
+            for i in range(len(tour)-1):
+                self.length += self.tsp.distance_matrix[tour[i]][tour[i+1]]
+            self.length += self.tsp.distance_matrix[tour[0]][tour[-1]]
         return self.length
 
     def get_tour(self, start=False):
@@ -69,6 +71,7 @@ class TspHeuristic:
         """Builds the list of node coordinates in the tour's sequence."""
         nodes = self.get_tour()
         tour = [self.nodes[i].coords for i in nodes]
+        tour.append(self.get_starting_node_for_plotting())
         return tour
 
     def get_starting_node_for_plotting(self):
@@ -310,3 +313,154 @@ class ShortestEdge(ConstructionHeuristic):
                     edge_stack.remove(e)
         open_nodes = [i for i in range(self.num_edges) if self.tour[i,:].sum() == 1]
         self.start = open_nodes[0]
+
+#########################################################################################################
+# Improvement Heuristics
+
+# Moves for the greedy local search algorithm
+class Move():
+    def __init__(self, heuristic):
+        self.heuristic = heuristic
+
+    def do(self):
+        """Executes the move."""
+        raise NotImplementedError()
+
+    def _select_nodes_for_move(self, size=1, exclude=[]):
+        """Selects one or more nodes in the tour.
+
+        Parameters:
+        size:       How many nodes to select
+        exclude:    List of nodes that are not available for selection"""
+        available = set(range(self.heuristic.num_nodes)) - set(exclude)
+        return np.random.choice(list(available), size, replace=False)
+
+    def _d(self, n1, n2):
+        node1 = self.heuristic.tour[n1]
+        node2 = self.heuristic.tour[n2]
+        return self.heuristic.tsp.distance_matrix[node1,node2]
+
+    def _get_successor(self, node):
+        n = self.heuristic.tour.index(node)
+        return n+1 if n <= self.heuristic.num_nodes-2 else 0
+
+    def _get_predecessor(self, node):
+        n = self.heuristic.tour.index(node)
+        return n-1 if 1 <= n and n <= self.heuristic.num_nodes-1 else self.heuristic.num_nodes-1
+
+class Swap(Move):
+    def __init__(self, heuristic):
+        super().__init__(heuristic)
+
+    def do(self):
+        i, j = self._select_nodes_for_move(2)
+        i_pre = self._get_predecessor(i)
+        j_pre = self._get_predecessor(j)
+        i_suc = self._get_successor(i)
+        j_suc = self._get_successor(j)
+
+        if i_suc == j:
+            dl = self._d(i_pre,j) + self._d(i,j_suc) - self._d(i_pre,i) - self._d(j, j_suc)
+        elif j_suc == i:
+            dl = self._d(j_pre,i) + self._d(j, i_suc) - self._d(j_pre, j) - self._d(i, i_suc)
+        else:
+            dl = self._d(i_pre, j) + self._d(j, i_suc) + self._d(j_pre, i) + self._d(i, j_suc) - self._d(i_pre, i) - self._d(i, i_suc) - self._d(j_pre, j) - self._d(j, j_suc)
+
+        return i, j, dl
+
+
+class Translate(Move):
+    def __init__(self, heuristic):
+        super().__init__(heuristic)
+
+    def do(self):
+        pass
+
+
+class Invert(Move):
+    def __init__(self, heuristic):
+        super().__init__(heuristic)
+
+    def do(self):
+        pass
+
+class Mixed(Move):
+
+    def __init__(self, heuristic):
+        super().__init__(heuristic)
+        self.moves = [
+            Swap(heuristic),
+            Translate(heuristic),
+            Invert(heuristic)]
+
+    def _choose_move(self):
+        return np.random.choice(self.moves,size=1)
+
+    def do(self):
+        move = self._choose_move()
+        move.do()
+
+
+class ImprovementHeuristic(TspHeuristic):
+    def __init__(self, tsp_config):
+        super().__init__(tsp_config)
+        self.tour = []
+
+    def loss(self, tour=None):
+        length = 0
+        if not tour:
+            tour = self.tour
+        for i in range(len(tour)-1):
+            length += self.tsp.distance_matrix[tour[i]][tour[i+1]]
+        length += self.tsp.distance_matrix[tour[0]][tour[-1]]
+        return length
+
+    def get_tour(self):
+        return self.tour
+
+    def get_tour_for_plotting(self):
+        tour = [self.nodes[i].coords for i in self.tour]
+        tour.append(self.nodes[0].coords)
+        return tour
+
+    def get_starting_node_for_plotting(self):
+        return self.nodes[self.tour[0]].coords
+
+    def _accept_solution(self, dl):
+        """Compares loss of solution after move to existing solution
+        and votes to accept new if loss is lower."""
+        if dl < 0:
+            return True
+        return False
+
+    def _init_algo(self):
+        # Create a random permutation of the nodes
+        self.tour = list(np.random.choice(range(self.num_nodes),size=self.num_nodes,replace=False))
+        self.length = 0
+        self.finished = False
+
+    def _tour_finished(self):
+        return self.finished
+
+
+class GreedyLocalSearch(ImprovementHeuristic):
+    """Performs a greedy local search with the specified move.
+
+    Parameters:
+    move:   A child class of Move"""
+    def __init__(self, tsp_config, move):
+        super().__init__(tsp_config)
+        self.stopping_criterion = 10 * self.num_nodes**2
+        self.finished = False
+        self.move = move(self)
+
+    def calculate_tour(self):
+        self._init_algo()
+
+        iter = 0
+        while iter < self.stopping_criterion:
+            i, j, dl = self.move.do()
+            if self._accept_solution(dl):
+                self.tour[i], self.tour[j] = self.tour[j], self.tour[i]
+            iter += 1
+        self.finished = True
