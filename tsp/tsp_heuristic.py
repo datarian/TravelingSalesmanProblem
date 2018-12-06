@@ -21,7 +21,7 @@ class TspHeuristic:
     def __init__(self, tsp_config):
         self.tsp = tsp_config
         self.num_nodes = self.tsp.distance_matrix.shape[0]
-        self.length = 0
+        self.l = 0
         self.start = None
 
     @property
@@ -59,14 +59,14 @@ class ConstructionHeuristic(TspHeuristic):
         self.stopping_criterion = 2*(self.num_nodes-1)# All nodes have 2 edges attached
 
     def loss(self, cycle=None):
-        if self.length == 0:
+        if self.l == 0:
             if not self._cycle_finished():
              self.calculate_cycle()
             cycle = self.get_cycle()
             for i in range(len(cycle)-1):
-                self.length += self.tsp.distance_matrix[cycle[i]][cycle[i+1]]
-            self.length += self.tsp.distance_matrix[cycle[0]][cycle[-1]]
-        return self.length
+                self.l += self.tsp.distance_matrix[cycle[i]][cycle[i+1]]
+            self.l += self.tsp.distance_matrix[cycle[0]][cycle[-1]]
+        return self.l
 
     def get_cycle(self, start=False):
         """Builds the cycle in the correct order."""
@@ -190,7 +190,7 @@ class BestInsertion(ConstructionHeuristic):
         """ Initializes the best insertion algorithm.
         Selects three random nodes as the starting cycle.
         """
-        self.length = 0
+        self.l = 0
         self.cycle = np.zeros_like(self.tsp.distance_matrix)
 
         # draw 3 random nodes
@@ -255,7 +255,7 @@ class BestBestInsertion(ConstructionHeuristic):
         Selects one random node to start the cycle.
         """
         self.cycle = np.zeros_like(self.tsp.distance_matrix)
-        self.length = 0
+        self.l = 0
         self.start = self._select_new_node()
         next = [operator.itemgetter(0)(n) for n in sorted(enumerate(self.tsp.distance_matrix[self.start,:]), key=operator.itemgetter(1))][1]
         self._insert_into_cycle(self.start,next)
@@ -311,7 +311,7 @@ class ShortestEdge(ConstructionHeuristic):
 
     def _init_algo(self):
         self.cycle = np.zeros_like(self.tsp.distance_matrix)
-        self.length = 0
+        self.l = 0
         self.start = self.edges[0].node1
         self._insert_into_cycle(self.edges[0].node1,self.edges[0].node2, right=False)
 
@@ -344,7 +344,7 @@ class ShortestEdge(ConstructionHeuristic):
 
         return self.loss()
 
-#########################################################################################################
+##################################################################################################
 # Improvement Heuristics
 
 # Moves for the greedy local search algorithm
@@ -436,7 +436,6 @@ class Invert(Move):
         return tau
 
 class Mixed(Move):
-
     def __init__(self, heuristic):
         super().__init__(heuristic)
         self.moves = [
@@ -458,13 +457,13 @@ class ImprovementHeuristic(TspHeuristic):
         self.cycle = []
 
     def loss(self, cycle=None):
-        length = 0
+        l = 0
         if not cycle:
             cycle = self.cycle
         for i in range(len(cycle)-1):
-            length += self.tsp.distance_matrix[cycle[i]][cycle[i+1]]
-        length += self.tsp.distance_matrix[cycle[-1]][cycle[0]]
-        return length
+            l += self.tsp.distance_matrix[cycle[i]][cycle[i+1]]
+        l += self.tsp.distance_matrix[cycle[-1]][cycle[0]]
+        return l
 
     def get_cycle(self):
         return self.cycle
@@ -487,11 +486,11 @@ class ImprovementHeuristic(TspHeuristic):
     def _init_algo(self, save_steps=False):
         # Create a random permutation of the nodes
         self.cycle = list(np.random.choice(list(self.nodes.keys()),size=self.num_nodes,replace=False))
-        self.length = self.loss()
+        self.l = self.loss()
         self.finished = False
         if save_steps:
             self.steps = []
-            self.steps.append(self.length)
+            self.steps.append(self.l)
 
     def _cycle_finished(self):
         return self.finished
@@ -515,9 +514,9 @@ class GreedyLocalSearch(ImprovementHeuristic):
         while iter < self.stopping_criterion:
             tau = self.move.do()
             loss_t = self.loss(tau)
-            if loss_t < self.length:
+            if loss_t < self.l:
                 self.cycle = tau
-                self.length = loss_t
+                self.l = loss_t
             if save_steps:
                 self.steps.append(loss_t)
             iter += 1
@@ -592,10 +591,10 @@ class SimulatedAnnealing(ImprovementHeuristic):
                 d_new = self._create_candidate()
                 if self._accept(d_new, temp):
                     self.cycle = d_new
-                    self.length = self.loss()
+                    self.l = self.loss()
                 if save_steps:
                     pass
                 i += 1
             t += 1
             temp = self._cool(t)
-        return self.length
+        return self.l
