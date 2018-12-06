@@ -524,6 +524,26 @@ class GreedyLocalSearch(ImprovementHeuristic):
         self.finished = True
         return self.loss()
 
+class GreedyLocalSearchSwap(GreedyLocalSearch):
+    def __init__(self, tsp_config):
+        super().__init__(tsp_config, Swap)
+
+
+class GreedyLocalSearchTranslate(GreedyLocalSearch):
+    def __init__(self, tsp_config):
+        super().__init__(tsp_config, Translate)
+
+
+class GreedyLocalSearchInvert(GreedyLocalSearch):
+    def __init__(self, tsp_config):
+        super().__init__(tsp_config, Translate)
+
+
+class GreedyLocalSearchMixed(GreedyLocalSearch):
+    def __init__(self, tsp_config):
+        super().__init__(tsp_config, Mixed)
+
+
 class SimulatedAnnealing(ImprovementHeuristic):
     def __init__(self, tsp_config, criterion='metropolis', move = Swap):
         assert(criterion in ['metropolis', 'heatbath'])
