@@ -554,18 +554,18 @@ class SimulatedAnnealing(ImprovementHeuristic):
     def _cool(self, t):
         return self.t_max*self.cooling_factor**t
 
-    def _accept(self, d_new, t):
+    def _accept(self, d_new, temp):
         dl = self.loss(d_new) - self.loss()
         if self.criterion == 'metropolis':
             if dl < 0:
                 return True
             else:
                 d = np.random.uniform()
-                if d < np.exp([-dl/t]):
+                if d < np.exp([-dl/temp]):
                     return True
         elif self.criterion == 'heatbath':
             d = np.random.uniform()
-            if d < 1/(1+np.exp([dl/t])):
+            if d < 1/(1+np.exp([dl/temp])):
                 return True
         return False
 
@@ -595,3 +595,13 @@ class SimulatedAnnealing(ImprovementHeuristic):
             t += 1
             temp = self._cool(t)
         return self.l
+
+
+class SimulatedAnnealingMetropolis(SimulatedAnnealing):
+    def __init__(self, tsp_config, move=Swap):
+        super().__init__(tsp_config, criterion='metropolis', move=move)
+
+
+class SimulatedAnnealingHeatBath(SimulatedAnnealing):
+    def __init__(self, tsp_config, move=Swap):
+        super().__init__(tsp_config,  criterion='heatbath', move=move)
