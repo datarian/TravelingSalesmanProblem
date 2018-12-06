@@ -536,7 +536,7 @@ class GreedyLocalSearchTranslate(GreedyLocalSearch):
 
 class GreedyLocalSearchInvert(GreedyLocalSearch):
     def __init__(self, tsp_config):
-        super().__init__(tsp_config, Translate)
+        super().__init__(tsp_config, Invert)
 
 
 class GreedyLocalSearchMixed(GreedyLocalSearch):
