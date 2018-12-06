@@ -71,11 +71,11 @@ class ConstructionHeuristic(TspHeuristic):
     def get_cycle(self, start=False):
         """Builds the cycle in the correct order."""
         # init
-        nodes = []
+        cycle = []
         included = set()
         if not start:
             start = self.start
-        nodes.append(start)
+        cycle.append(start)
         included.add(start)
         current = start
 
@@ -86,18 +86,15 @@ class ConstructionHeuristic(TspHeuristic):
             if len(possible_nexts) == 1 and current != start:
                 finished = True
             elif not next:
-                print("The list of possible next nodes is empty!!!")
-                print("The cycle so far: {}".format(nodes))
-                print("Candidate: {}".format(current))
-                print("Set of already-included nodes: {}".format(included))
+
                 finished = True
             else:
                 # We're inside the cycle. Remove any nodes already selected (basically, the one we came from)
                 insert = next.pop()
-                nodes.append(insert)
+                cycle.append(insert)
                 included.add(insert)
                 current = insert
-        return nodes
+        return cycle
 
     def get_cycle_for_plotting(self):
         """Builds the list of node coordinates in the cycle's sequence."""
@@ -557,18 +554,18 @@ class SimulatedAnnealing(ImprovementHeuristic):
     def _cool(self, t):
         return self.t_max*self.cooling_factor**t
 
-    def _accept(self, d_new, t):
+    def _accept(self, d_new, temp):
         dl = self.loss(d_new) - self.loss()
         if self.criterion == 'metropolis':
             if dl < 0:
                 return True
             else:
                 d = np.random.uniform()
-                if d < np.exp([-dl/t]):
+                if d < np.exp([-dl/temp]):
                     return True
         elif self.criterion == 'heatbath':
             d = np.random.uniform()
-            if d < 1/(1+np.exp([dl/t])):
+            if d < 1/(1+np.exp([dl/temp])):
                 return True
         return False
 
@@ -586,7 +583,7 @@ class SimulatedAnnealing(ImprovementHeuristic):
         temp = self.t_max
         t = 0
         while temp > self.t_min:
-            i = 1
+            i = 0
             while not self._check_equilibrium(i):
                 d_new = self._create_candidate()
                 if self._accept(d_new, temp):
@@ -598,3 +595,13 @@ class SimulatedAnnealing(ImprovementHeuristic):
             t += 1
             temp = self._cool(t)
         return self.l
+
+
+class SimulatedAnnealingMetropolis(SimulatedAnnealing):
+    def __init__(self, tsp_config, move=Swap):
+        super().__init__(tsp_config, criterion='metropolis', move=move)
+
+
+class SimulatedAnnealingHeatBath(SimulatedAnnealing):
+    def __init__(self, tsp_config, move=Swap):
+        super().__init__(tsp_config,  criterion='heatbath', move=move)
