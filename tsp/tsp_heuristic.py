@@ -40,11 +40,21 @@ class TspHeuristic:
     def get_cycle(self, tour=None):
         raise NotImplementedError()
 
-    def get_cycle_for_plotting(self):
-        raise NotImplementedError()
+    def get_cycle_for_plotting(self, nodes = None):
+        """Builds the list of node coordinates in the cycle's sequence.
+        If no nodes are passed in, takes the calculated cycle from the instance
+        variable self.cycle."""
+        if not nodes:
+            nodes = self.get_cycle()
+        cycle = [self.nodes[i].coords for i in nodes]
+        cycle.append(self.nodes[nodes[0]].coords)
+        return cycle
 
     def get_starting_node_for_plotting(self):
         raise NotImplementedError()
+
+    def get_steps(self):
+        return NotImplementedError()
 
 
 ############################################################################################
@@ -257,7 +267,7 @@ class BestBestInsertion(ConstructionHeuristic):
         next = [operator.itemgetter(0)(n) for n in sorted(enumerate(self.tsp.distance_matrix[self.start,:]), key=operator.itemgetter(1))][1]
         self._insert_into_cycle(self.start,next)
 
-    def calculate_cycle(self):
+    def calculate_cycle(self, save_steps=False):
         """Runs the best insertion algorithm."""
 
         self._init_algo()
@@ -311,7 +321,6 @@ class ShortestEdge(ConstructionHeuristic):
         self.l = 0
         self.start = self.edges[0].node1
         self._insert_into_cycle(self.edges[0].node1,self.edges[0].node2, right=False)
-
 
     def _check_constraints(self, new_edge):
         n1 = new_edge.node1
@@ -464,11 +473,6 @@ class ImprovementHeuristic(TspHeuristic):
 
     def get_cycle(self):
         return self.cycle
-
-    def get_cycle_for_plotting(self):
-        cycle = [self.nodes[i].coords for i in self.cycle]
-        cycle.append(self.get_starting_node_for_plotting())
-        return cycle
 
     def get_starting_node_for_plotting(self):
         return self.nodes[self.cycle[0]].coords
