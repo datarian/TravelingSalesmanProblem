@@ -357,6 +357,12 @@ class ShortestEdge(ConstructionHeuristic):
 class Move():
     def __init__(self, heuristic):
         self.heuristic = heuristic
+        self.i = None
+        self.j = None
+        self.i_pre = None
+        self.j_pre = None
+        self.i_suc = None
+        self.j_suc = None
 
     @property
     def cycle(self):
@@ -396,18 +402,30 @@ class Move():
             index = self.heuristic.num_nodes-1
         return index
 
+    def accept(self):
+        return NotImplementedError()
+
 class Swap(Move):
     def __init__(self, heuristic):
         super().__init__(heuristic)
 
     def do(self):
         tau = self.cycle.copy()
-        i, j = self._select_nodes_for_move(size=2)
-
-        tau[i], tau[j] = tau[j], tau[i]
+        self.i, self.j = self._select_nodes_for_move(size=2)
+        self.i_pre, self.j_pre = [self._get_predecessor(n) for n in [self.i, self.j]]
+        self.i_suc, self.j_suc = [self._get_successor(n) for n in [self.i, self.j]]
+        tau[self.i], tau[self.j] = tau[self.j], tau[self.i]
 
         return tau
 
+    def accept(self):
+        if self.i == self.j:
+            dl = self._d(self.i_pre, self.j) + self._d(self.i, self.j_suc) - self._d(self.i_pre, self.i) - self._d(self.j, self.j_suc)
+        elif self.j_suc == self.i:
+            dl = self._d(self.j_pre, self.i) + self._d(self.j, self.i_suc) - self._d(self.j_pre, self.j) - self._d(self.i, self.i_suc)
+        else:
+            dl = self._d(self.i_pre, self.j) + self._d(self.j, self.i_suc) + self._d(self.j_pre, self.i) + self._d(self.i, self.j_suc) - self._d(self.i_pre, self.i) - self._d(self.i_pre, self.i) - self._d(self.i, self.i_suc) - self._d(self.j_pre, self.j) - self._d(self.j, self.j_suc)
+        return dl <= 0
 
 class Translate(Move):
     def __init__(self, heuristic):
@@ -415,14 +433,26 @@ class Translate(Move):
 
     def do(self):
         tau = self.cycle.copy()
-        i, = self._select_nodes_for_move(size=1)
-        i_suc = self._get_successor(i)
-        j, = self._select_nodes_for_move(size=1, exclude=[i + i_suc])
+        self.i, = self._select_nodes_for_move(size=1)
+        self.i_pre = self._get_predecessor(self.i)
+        self.i_suc = self._get_successor(self.i)
+        self.j, = self._select_nodes_for_move(size=1, exclude=[self.i + self.i_suc])
+        self.j_pre = self._get_predecessor(self.j)
+        self.j_suc = self._get_successor(self.j)
 
-        node_j = tau[j]
+        node_j = tau[self.j]
         tau.remove(node_j)
-        tau = tau[:i_suc] + [node_j] +tau[i_suc:]
+        tau = tau[:self.i_suc] + [node_j] +tau[self.i_suc:]
         return tau
+
+    def accept(self):
+        if self.i_suc == self.j_pre:
+            dl = self._d(self.i, self.j) + self._d(self.i_suc, self.j_suc) - self._d(self.i, self.i_suc) - self._d(self.j,self.j_suc)
+        elif self.j_suc == self.i:
+            dl = self._d(self.j_pre, self.i) + self._d(self.j, self.i_suc) - self._d(self.j_pre, self.j) - self._d(self.i,self.i_suc)
+        else:
+            dl = self._d(self.i, self.j) + self._d(self.j, self.i_suc) + self._d(self.j_pre, self.j_suc) - self._d(self.i, self.i_suc) - self._d(self.j_pre, self.j) - self._d(self.j, self.j_suc)
+        return dl <= 0
 
 
 class Invert(Move):
@@ -441,6 +471,10 @@ class Invert(Move):
         tau = tau[:i_suc]+list(reversed(tau[i_suc:j_suc]))+tau[j_suc:]
         return tau
 
+    def accept(self):
+        dl = self._d(self.i, self.j) + self._d(self.i_suc, self.j_suc) - self._d(self.i, self.i_suc) - self._d(self.j, self.j_suc)
+        return dl <= 0
+
 class Mixed(Move):
     def __init__(self, heuristic):
         super().__init__(heuristic)
@@ -454,7 +488,11 @@ class Mixed(Move):
 
     def do(self):
         m = self._choose_move()
+        self.current = m
         return self.moves[m].do()
+
+    def accept(self):
+        return self.moves[self.current].accept()
 
 
 class ImprovementHeuristic(TspHeuristic):
@@ -515,11 +553,11 @@ class GreedyLocalSearch(ImprovementHeuristic):
         while iter < self.stopping_criterion:
             tau = self.move.do()
             loss_t = self.loss(tau)
-            if loss_t < self.l:
+            if loss_t <= self.l:
                 self.cycle = tau
                 self.l = loss_t
             if save_steps:
-                self.steps.append(loss_t)
+                self.steps.append(np.amin([loss_t, self.l]))
             iter += 1
         self.finished = True
         return self.loss()
@@ -558,8 +596,7 @@ class SimulatedAnnealing(ImprovementHeuristic):
     def _cool(self, t):
         return self.t_max*self.cooling_factor**t
 
-    def _accept(self, d_new, temp):
-        dl = self.loss(d_new) - self.loss()
+    def _accept(self, dl, temp):
         if self.criterion == 'metropolis':
             if dl < 0:
                 return True
@@ -573,6 +610,14 @@ class SimulatedAnnealing(ImprovementHeuristic):
                 return True
         return False
 
+    def _init_algo(self, save_steps=False):
+        # Create a random permutation of the nodes
+        self.cycle = list(np.random.choice(list(self.nodes.keys()),size=self.num_nodes,replace=False))
+        self.l = self.loss()
+        self.finished = False
+        if save_steps:
+            self.steps = {}
+
     def _check_equilibrium(self, i):
         if i < self.max_it:
             return False
@@ -582,21 +627,28 @@ class SimulatedAnnealing(ImprovementHeuristic):
         return self.move.do()
 
     def calculate_cycle(self, save_steps=False):
-        self._init_algo()
+        self._init_algo(save_steps)
 
         temp = self.t_max
         t = 0
         while temp > self.t_min:
             i = 0
+            losses = []
             while not self._check_equilibrium(i):
                 d_new = self._create_candidate()
-                if self._accept(d_new, temp):
+                new_loss = self.loss(d_new)
+                dl = new_loss - self.l
+                if self._accept(dl, temp):
                     self.cycle = d_new
                     self.l = self.loss()
                 if save_steps:
-                    pass
+                    losses.append(new_loss)
                 i += 1
             t += 1
+            if save_steps:
+                self.steps[temp] = {'min': np.amin(losses),
+                                    'max': np.amax(losses),
+                                    'mean': np.mean(losses)}
             temp = self._cool(t)
         return self.l
 
