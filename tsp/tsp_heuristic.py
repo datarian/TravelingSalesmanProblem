@@ -512,8 +512,12 @@ class ImprovementHeuristic(TspHeuristic):
         if not cycle:
             cycle = self.cycle
         for i in range(len(cycle)-1):
-            l += self.tsp.distance_matrix[cycle[i]][cycle[i+1]]
-        l += self.tsp.distance_matrix[cycle[-1]][cycle[0]]
+            row = cycle[i] * self.num_nodes
+            col = cycle[i+1]
+            l += self.tsp.distance_matrix.item(row+col)
+        row = cycle[-1] * self.num_nodes
+        col = cycle[0]
+        l += self.tsp.distance_matrix.item(row+col)
         return l
 
     def get_cycle(self):
