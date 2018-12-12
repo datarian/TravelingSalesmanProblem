@@ -364,12 +364,6 @@ class ShortestEdge(ConstructionHeuristic):
 class Move():
     def __init__(self, heuristic):
         self.heuristic = heuristic
-        self.i = None
-        self.j = None
-        self.i_pre = None
-        self.j_pre = None
-        self.i_suc = None
-        self.j_suc = None
 
     @property
     def cycle(self):
