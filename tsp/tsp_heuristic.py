@@ -416,10 +416,8 @@ class Swap(Move):
 
     def do(self):
         tau = self.cycle.copy()
-        self.i, self.j = self._select_nodes_for_move(size=2)
-        self.i_pre, self.j_pre = [self._get_predecessor(n) for n in [self.i, self.j]]
-        self.i_suc, self.j_suc = [self._get_successor(n) for n in [self.i, self.j]]
-        tau[self.i], tau[self.j] = tau[self.j], tau[self.i]
+        i, j = self._select_nodes_for_move(size=2)
+        tau[i], tau[j] = tau[j], tau[i]
 
         return tau
 
@@ -430,16 +428,14 @@ class Translate(Move):
 
     def do(self):
         tau = self.cycle.copy()
-        self.i, = self._select_nodes_for_move(size=1)
-        self.i_pre = self._get_predecessor(self.i)
-        self.i_suc = self._get_successor(self.i)
-        self.j, = self._select_nodes_for_move(size=1, exclude=[self.i + self.i_suc])
-        self.j_pre = self._get_predecessor(self.j)
-        self.j_suc = self._get_successor(self.j)
-
-        node_j = tau[self.j]
+        i, = self._select_nodes_for_move(size=1)
+        i_suc = self._get_successor(self.i)
+        j, = self._select_nodes_for_move(size=1, exclude=[i + i_suc])
+        insert_j_at = self._get_successor(i_suc)
+        node_j = tau[j]
         tau.remove(node_j)
-        tau = tau[:self.i_suc] + [node_j] +tau[self.i_suc:]
+        tau.insert(insert_j_at, node_j)
+
         return tau
 
 
@@ -456,7 +452,6 @@ class Invert(Move):
                 j,i = i,j
             i_suc = self._get_successor(i)
             j_suc = self._get_successor(j)
-        #tau = tau[:i_suc]+list(reversed(tau[i_suc:j_suc]))+tau[j_suc:]
         tau[i_suc:j_suc] = tau[i_suc:j_suc][::-1]
         return tau
 
