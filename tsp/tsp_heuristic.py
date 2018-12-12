@@ -13,7 +13,14 @@ __all__ = [
     'BestBestInsertion',
     'ShortestEdge',
     'GreedyLocalSearch',
-    'Swap','Translate', 'Invert', 'Mixed'
+    'Swap','Translate', 'Invert', 'Mixed',
+    'GreedyLocalSearchSwap',
+    'GreedyLocalSearchTranslate',
+    'GreedyLocalSearchInvert',
+    'GreedyLocalSearchMixed',
+    'SimulatedAnnealing',
+    'SimulatedAnnealingMetropolis',
+    'SimulatedAnnealingHeatBath'
 ]
 
 
