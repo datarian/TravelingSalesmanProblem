@@ -47,7 +47,7 @@ class Edge:
         return self.edge
 
 
-class TravelingSalesmanProblem:
+class TravelingSalesPersonProblem:
     """Holds the nodes and distance matrix for a traveling salesman problem.
     It also provides methods for calculating the distance between nodes.
 
