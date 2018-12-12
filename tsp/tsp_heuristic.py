@@ -429,7 +429,7 @@ class Translate(Move):
     def do(self):
         tau = self.cycle.copy()
         i, = self._select_nodes_for_move(size=1)
-        i_suc = self._get_successor(self.i)
+        i_suc = self._get_successor(i)
         j, = self._select_nodes_for_move(size=1, exclude=[i + i_suc])
         insert_j_at = self._get_successor(i_suc)
         node_j = tau[j]
