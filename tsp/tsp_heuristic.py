@@ -82,7 +82,7 @@ class ConstructionHeuristic(TspHeuristic):
             cycle = self.get_cycle()
             for i in range(len(cycle)-1):
                 self.l += self.tsp.distance_matrix[cycle[i]][cycle[i+1]]
-            self.l += self.tsp.distance_matrix[cycle[0]][cycle[-1]]
+            self.l += self.tsp.distance_matrix[cycle[-1]][cycle[0]]
         return self.l
 
     def get_cycle(self, start=False):
@@ -223,12 +223,12 @@ class BestInsertion(ConstructionHeuristic):
             except ValueError:
                 print("No more nodes available! {}".format(set(self.tsp.nodes.keys()) - set(self.cycle)))
                 print("Number of None values in cycle: {}".format(len([i for i in self.cycle if i is None])))
-            left, right = self._calc_loss(next)
+            left, right = self._calc_delta_loss(next)
             self._insert_into_cycle(left, next, right)
 
         return self.loss()
 
-    def _calc_loss(self, new_node):
+    def _calc_delta_loss(self, new_node):
         """Calculates the increase when the new point is inserted between any of the
         existing nodes.
         The returned list's indices can be used to select the left node for insertion, chosen
@@ -409,8 +409,6 @@ class Move():
             index = self.heuristic.num_nodes-1
         return index
 
-    def accept(self):
-        return NotImplementedError()
 
 class Swap(Move):
     def __init__(self, heuristic):
@@ -425,14 +423,6 @@ class Swap(Move):
 
         return tau
 
-    def accept(self):
-        if self.i == self.j:
-            dl = self._d(self.i_pre, self.j) + self._d(self.i, self.j_suc) - self._d(self.i_pre, self.i) - self._d(self.j, self.j_suc)
-        elif self.j_suc == self.i:
-            dl = self._d(self.j_pre, self.i) + self._d(self.j, self.i_suc) - self._d(self.j_pre, self.j) - self._d(self.i, self.i_suc)
-        else:
-            dl = self._d(self.i_pre, self.j) + self._d(self.j, self.i_suc) + self._d(self.j_pre, self.i) + self._d(self.i, self.j_suc) - self._d(self.i_pre, self.i) - self._d(self.i_pre, self.i) - self._d(self.i, self.i_suc) - self._d(self.j_pre, self.j) - self._d(self.j, self.j_suc)
-        return dl <= 0
 
 class Translate(Move):
     def __init__(self, heuristic):
@@ -452,15 +442,6 @@ class Translate(Move):
         tau = tau[:self.i_suc] + [node_j] +tau[self.i_suc:]
         return tau
 
-    def accept(self):
-        if self.i_suc == self.j_pre:
-            dl = self._d(self.i, self.j) + self._d(self.i_suc, self.j_suc) - self._d(self.i, self.i_suc) - self._d(self.j,self.j_suc)
-        elif self.j_suc == self.i:
-            dl = self._d(self.j_pre, self.i) + self._d(self.j, self.i_suc) - self._d(self.j_pre, self.j) - self._d(self.i,self.i_suc)
-        else:
-            dl = self._d(self.i, self.j) + self._d(self.j, self.i_suc) + self._d(self.j_pre, self.j_suc) - self._d(self.i, self.i_suc) - self._d(self.j_pre, self.j) - self._d(self.j, self.j_suc)
-        return dl <= 0
-
 
 class Invert(Move):
     def __init__(self, heuristic):
@@ -475,12 +456,10 @@ class Invert(Move):
                 j,i = i,j
             i_suc = self._get_successor(i)
             j_suc = self._get_successor(j)
-        tau = tau[:i_suc]+list(reversed(tau[i_suc:j_suc]))+tau[j_suc:]
+        #tau = tau[:i_suc]+list(reversed(tau[i_suc:j_suc]))+tau[j_suc:]
+        tau[i_suc:j_suc] = tau[i_suc:j_suc][::-1]
         return tau
 
-    def accept(self):
-        dl = self._d(self.i, self.j) + self._d(self.i_suc, self.j_suc) - self._d(self.i, self.i_suc) - self._d(self.j, self.j_suc)
-        return dl <= 0
 
 class Mixed(Move):
     def __init__(self, heuristic):
@@ -497,9 +476,6 @@ class Mixed(Move):
         m = self._choose_move()
         self.current = m
         return self.moves[m].do()
-
-    def accept(self):
-        return self.moves[self.current].accept()
 
 
 class ImprovementHeuristic(TspHeuristic):
