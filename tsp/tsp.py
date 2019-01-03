@@ -26,7 +26,8 @@ class Node:
 
 @functools.total_ordering
 class Edge:
-    """Represents an edge, the connecting line terminated by two nodes."""
+    """Represents an edge, connecting two nodes.
+    """
     def __init__(self, node1, node2, tsp_config):
         self.tsp = tsp_config
         self.node1 = node1
@@ -47,7 +48,7 @@ class Edge:
         return self.edge
 
 
-class TravelingSalesmanProblem:
+class TravelingSalesPersonProblem:
     """Holds the nodes and distance matrix for a traveling salesman problem.
     It also provides methods for calculating the distance between nodes.
 
